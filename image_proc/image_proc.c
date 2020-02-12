@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
     /* Initialize device */
     device = init_opencl_device(CL_DEVICE_TYPE_DEFAULT);
     global_work_size = image_width * image_height;
-    local_work_size = global_work_size/ 32;
+    local_work_size = 32;
 
     /* Create OpenCL context */
     context = clCreateContext(NULL, 1, &device, NULL, NULL, &cl_error);
