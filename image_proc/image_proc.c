@@ -70,6 +70,11 @@ int main(int argc, char *argv[])
     CHECK_OUTPUT(cl_error);
     cl_error = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void*)&output_buffer_cl);
     CHECK_OUTPUT(cl_error);
+    cl_error = clSetKernelArg(kernel, 2, sizeof(unsigned int), (void*)&image_width);
+    CHECK_OUTPUT(cl_error);
+    cl_error = clSetKernelArg(kernel, 3, sizeof(unsigned int), (void*)&image_height);
+    CHECK_OUTPUT(cl_error);
+
 
     /* Launch kernel */
     cl_error = clEnqueueNDRangeKernel(cmd_queue, kernel, CL_TRUE, NULL, &global_work_size, &local_work_size, 0, NULL, NULL);
