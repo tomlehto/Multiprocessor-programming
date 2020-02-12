@@ -3,7 +3,7 @@ __kernel void image_proc(__global unsigned char* input, __global unsigned char* 
     int x = get_global_id(0);
     int y = get_global_id(1);
     int tmp;
-    if (x % 512 < 2 || x % 512>= width-2 || y < 2 || y >= height-2)
+    if (x % 512 < 2 || x % 512>= width-2 )
     {
         output[y*width + x]  = input[y*width + x];
     }
