@@ -3,7 +3,7 @@ __kernel void image_proc(__global unsigned char* input, __global unsigned char* 
     int x = get_global_id(0);
     int y = get_global_id(1);
     int tmp;
-    if (x % 512 < 2 || x % 512>= width-2 )
+    if (x % width < 2 || x % width >= width-2 || x < 2*width || x > width * height - 2 * width)
     {
         output[y*width + x]  = input[y*width + x];
     }
@@ -17,7 +17,8 @@ __kernel void image_proc(__global unsigned char* input, __global unsigned char* 
                 tmp += input[(y+i)*width + x+j];
             }
         }
-        //output[y*width + x] = tmp * 0.04;
-        output[y*width + x] = 255;
+        //output[y*width + x]  = input[y*width + x];
+        output[y*width + x] = tmp * 0.04;
+        //output[y*width + x] = 255;
     }
 }
