@@ -5,7 +5,7 @@ __kernel void image_proc(__global unsigned char* input, __global unsigned char* 
     int tmp;
     if (x % width < 2 || x % width >= width-2 || x < 2*width || x > width * height - 2 * width)
     {
-        output[y*width + x]  = input[y*width + x];
+        output[x]  = input[x];
     }
     else
     {
