@@ -4,6 +4,7 @@
 #define M_ROWS 100
 #define M_COLS 100
 #define MAX_SOURCE_SIZE (0x100000)
+#define GPU_MODE 1
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,7 +37,11 @@ int main()
     size_t global_work_size = M_ROWS * M_COLS;
     size_t local_work_size = 4;
     clock_t start, end;
-
+#if GPU_MODE
+    cl_device_type device_type = CL_DEVICE_TYPE_GPU;
+#else
+    cl_device_type device_type = CL_DEVICE_TYPE_CPU;
+#endif
     /* Load kernel source code */
     fp = fopen(file_name, "r");
     if (!fp) {
@@ -59,7 +64,7 @@ int main()
 
     cl_error = clGetPlatformIDs (1, &platform, NULL);
 
-    cl_error = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+    cl_error = clGetDeviceIDs(platform, device_type, 1, &device, NULL);
 
     print_device_info(device);
 
