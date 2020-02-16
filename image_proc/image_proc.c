@@ -33,6 +33,10 @@ int main(int argc, char *argv[])
     cl_int cl_error = CL_SUCCESS;
     cl_command_queue cmd_queue = NULL;
     cl_mem input_buffer_cl, output_buffer_cl;
+    cl_event event;
+    cl_ulong start;
+    cl_ulong end;
+    double execution_time_ns;
     
     image_in = read_image(NULL, &image_width, &image_height);
     if (image_in == NULL)
@@ -52,8 +56,8 @@ int main(int argc, char *argv[])
     context = clCreateContext(NULL, 1, &device, NULL, NULL, &cl_error);
     CHECK_OUTPUT(cl_error);
 
-    /* Create command queue */
-    cmd_queue = clCreateCommandQueue(context, device, 0, &cl_error);
+    /* Create command queue with profiling enabled*/
+    cmd_queue = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &cl_error);
     CHECK_OUTPUT(cl_error);
 
     /* Allocate and initialize device memory for input and output matrices */
@@ -76,9 +80,12 @@ int main(int argc, char *argv[])
     CHECK_OUTPUT(cl_error);
 
 
-    /* Launch kernel */
-    cl_error = clEnqueueNDRangeKernel(cmd_queue, kernel, CL_TRUE, NULL, &global_work_size, &local_work_size, 0, NULL, NULL);
+    /* Launch kernel and link to event*/
+    cl_error = clEnqueueNDRangeKernel(cmd_queue, kernel, CL_TRUE, NULL, &global_work_size, &local_work_size, 0, NULL, &event);
     CHECK_OUTPUT(cl_error);
+
+    /* Wait for kernel to finish */
+    clWaitForEvents(1, &event);
 
     /* Copy the output from device memory back to host memory */
     image_out = (unsigned char*) malloc(image_buffer_size);
@@ -86,6 +93,15 @@ int main(int argc, char *argv[])
     CHECK_OUTPUT(cl_error);
     /* Cleanup */
     cleanup(cmd_queue, kernel, context, input_buffer_cl, output_buffer_cl);
+
+    /* Profiling */
+    cl_error = clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(start), &start, NULL);
+    CHECK_OUTPUT(cl_error);
+    cl_error = clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
+    CHECK_OUTPUT(cl_error);
+
+    execution_time_ns = end - start;
+    printf("Total kernel execution time is: %0.3f milliseconds \n", execution_time_ns / 1000000.0);
     /*-------------------------------------------------------------------*/
 
     write_image(NULL, image_out, image_width, image_height);
