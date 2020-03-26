@@ -51,9 +51,12 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
+.vscode/
 */a.out
 */output.png
 hello_world/hello
 image_proc/image_proc
 read_png/readimg
 add_matrix/add_matrix
+
+*.png
