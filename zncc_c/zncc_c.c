@@ -41,7 +41,6 @@ int main(int argc, char *argv[])
         printf("usage: ./zncc_c input_filename1 input_filename2 [output_filename]\n");
         return 0;
     }
-    printf("w %d h %d \n", w,h);
     error = lodepng_decode_file(&ir, &w, &h, input_file_right, LCT_GREY, 8);
     if (error) 
     {
@@ -175,7 +174,6 @@ void post_processing(unsigned char* disparity_l2r, unsigned char* disparity_r2l,
     unsigned char max = 0;
     unsigned char min = 255;
     unsigned char nn_color = 0; // color of nearest neighbour
-    printf("Post \n");
 
     for (int idx = 0; idx < img_size; idx++)
     {
