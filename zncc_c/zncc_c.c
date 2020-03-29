@@ -49,8 +49,6 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    printf("w %d h %d \n", w,h);
-
     /* Disparity */
     disparity_l2r = calloc(w * h, sizeof(unsigned char));
     disparity_r2l = calloc(w * h, sizeof(unsigned char));
