@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
     cl_error = clGetEventProfilingInfo(event_2, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
     CHECK_OUTPUT(cl_error);
     execution_time_ms += end - start;
-    printf("Total ZNCC kernel execution time for is: %0.3f milliseconds \n", execution_time_ms / 1000000.0);
+    printf("Total ZNCC kernel execution time is: %0.3f milliseconds \n", execution_time_ms / 1000000.0);
 
     /* Cleanup */
     cleanup(cmd_queue, kernel, context, input_buffer_left_cl, input_buffer_right_cl, output_buffer_l2r_cl, output_buffer_r2l_cl);
