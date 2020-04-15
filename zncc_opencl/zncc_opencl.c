@@ -230,9 +230,6 @@ int main(int argc, char *argv[])
 
     /* Cleanup */
     cleanup(cmd_queue, kernel, context, input_buffer_left_cl, input_buffer_right_cl, output_buffer_l2r_cl, output_buffer_r2l_cl);
-
-    /* Encode result */
-    lodepng_encode_file(output_file, final_result, w, h, LCT_GREY, 8);
     free(disparity_l2r);
     free(disparity_r2l);
     free(final_result);
