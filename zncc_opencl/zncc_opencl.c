@@ -50,13 +50,14 @@ int main(int argc, char *argv[])
     /* OpenCL related declarations */
     cl_device_id device = NULL;
     size_t global_work_size[2];
+    size_t global_work_size_lpf;
     size_t image_buffer_size;
     cl_context context = NULL;
-    cl_kernel kernel;
+    cl_kernel kernel, kernel_lpf;
     cl_int cl_error = CL_SUCCESS;
     cl_command_queue cmd_queue = NULL;
-    cl_mem input_buffer_left_cl, input_buffer_right_cl;
-    cl_mem output_buffer_l2r_cl, output_buffer_r2l_cl;
+    cl_mem input_buffer_left_cl, input_buffer_right_cl, input_buffer_lpf_cl;
+    cl_mem output_buffer_l2r_cl, output_buffer_r2l_cl, output_buffer_lpf_cl;
     cl_event event_1;
     cl_event event_2;
     cl_ulong start;
@@ -182,14 +183,53 @@ int main(int argc, char *argv[])
     execution_time_ms += end - start;
     printf("Total ZNCC kernel execution time is: %0.3f milliseconds \n", execution_time_ms / 1000000.0);
 
-    /* Cleanup */
-    cleanup(cmd_queue, kernel, context, input_buffer_left_cl, input_buffer_right_cl, output_buffer_l2r_cl, output_buffer_r2l_cl);
-
     lodepng_encode_file("l2r.png", disparity_l2r, w, h, LCT_GREY, 8);
     lodepng_encode_file("r2l.png", disparity_r2l, w, h, LCT_GREY, 8);
 
     /* Post-processing */
     post_processing(disparity_l2r, disparity_r2l, final_result, w*h);
+
+    /* Encode result */
+    lodepng_encode_file(output_file, final_result, w, h, LCT_GREY, 8);
+
+    /*------------------------- LPF PART -------------------------*/
+    /* Create kernel */
+    kernel_lpf = create_kernel("lpf.cl", "lpf", context, device);
+
+    /* Allocate and initialize device memory for input and output */
+    input_buffer_lpf_cl  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, image_buffer_size, final_result, &cl_error);
+    CHECK_OUTPUT(cl_error);
+    output_buffer_lpf_cl = clCreateBuffer(context, CL_MEM_WRITE_ONLY, image_buffer_size, NULL, &cl_error);
+    CHECK_OUTPUT(cl_error);
+
+    /* Set kernel arguments */
+    /* __kernel void lpf(__global unsigned char* image_in, unsigned int w, __global unsigned char* image_out) */
+    global_work_size_lpf = (size_t)h;
+    cl_error = clSetKernelArg(kernel_lpf, 0, sizeof(cl_mem), (void*)&input_buffer_lpf_cl);
+    CHECK_OUTPUT(cl_error);
+    cl_error = clSetKernelArg(kernel_lpf, 1, sizeof(unsigned int), (void*)&w);
+    CHECK_OUTPUT(cl_error);
+    cl_error = clSetKernelArg(kernel_lpf, 2, sizeof(cl_mem), (void*)&output_buffer_lpf_cl);
+    CHECK_OUTPUT(cl_error);
+
+    /* Launch kernel and link to event*/
+    cl_error = clEnqueueNDRangeKernel(cmd_queue, kernel_lpf, 1, NULL, &global_work_size_lpf, NULL, 0, NULL, NULL);
+    CHECK_OUTPUT(cl_error);
+
+    /* Wait for kernel to finish */
+    clFinish(cmd_queue);
+
+    /* Copy the output from device memory back to host memory */
+    cl_error = clEnqueueReadBuffer(cmd_queue, output_buffer_lpf_cl, CL_TRUE, 0, image_buffer_size, final_result, 0, NULL, NULL);
+    CHECK_OUTPUT(cl_error);
+
+    /* Encode result */
+    lodepng_encode_file("output_lpf.png", final_result, w, h, LCT_GREY, 8);
+
+    /*------------------------------------------------------------*/
+
+    /* Cleanup */
+    cleanup(cmd_queue, kernel, context, input_buffer_left_cl, input_buffer_right_cl, output_buffer_l2r_cl, output_buffer_r2l_cl);
 
     /* Encode result */
     lodepng_encode_file(output_file, final_result, w, h, LCT_GREY, 8);

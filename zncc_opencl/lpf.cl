@@ -1,4 +1,4 @@
-__kernel void lpf(__global unsigned char* image_in, unsigned int w, unsigned int h, __global unsigned char* image_out)
+__kernel void lpf(__global unsigned char* image_in, unsigned int w, __global unsigned char* image_out)
 {
     const int j = get_global_id(0);
 
