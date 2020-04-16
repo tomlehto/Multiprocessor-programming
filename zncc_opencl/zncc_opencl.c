@@ -23,10 +23,10 @@ void post_processing(unsigned char* disparity_l2r, unsigned char* disparity_r2l,
 
 cl_device_id init_opencl_device(cl_device_type device_type);
 void print_device_info(cl_device_id device_id);
-cl_kernel create_kernel(char* filename, char* kernel_func_name, cl_context context, cl_device_id device);
-void cleanup(cl_command_queue cmd_queue, cl_kernel kernel,
+cl_kernel create_kernel(char* filename, char* kernel_func_name, cl_context context, cl_device_id device, char* compile_args);
+void cleanup(cl_command_queue cmd_queue, cl_kernel kernel1, cl_kernel kernel2,
              cl_context context, cl_mem buf1, cl_mem buf2,
-             cl_mem buf3, cl_mem buf4);
+             cl_mem buf3, cl_mem buf4, cl_mem buf5, cl_mem buf6);
 
 int main(int argc, char *argv[])
 {
@@ -50,18 +50,20 @@ int main(int argc, char *argv[])
     /* OpenCL related declarations */
     cl_device_id device = NULL;
     size_t global_work_size[2];
+    size_t global_work_size_lpf;
     size_t image_buffer_size;
     cl_context context = NULL;
-    cl_kernel kernel;
+    cl_kernel kernel, kernel_lpf;
     cl_int cl_error = CL_SUCCESS;
     cl_command_queue cmd_queue = NULL;
-    cl_mem input_buffer_left_cl, input_buffer_right_cl;
-    cl_mem output_buffer_l2r_cl, output_buffer_r2l_cl;
+    cl_mem input_buffer_left_cl, input_buffer_right_cl, input_buffer_lpf_cl;
+    cl_mem output_buffer_l2r_cl, output_buffer_r2l_cl, output_buffer_lpf_cl;
     cl_event event_1;
     cl_event event_2;
     cl_ulong start;
     cl_ulong end;
     double execution_time_ms = 0;
+    char compile_args[64];
 
     error = lodepng_decode_file(&il, &w, &h, input_file_left, LCT_GREY, 8);
     if (error) 
@@ -109,7 +111,7 @@ int main(int argc, char *argv[])
     CHECK_OUTPUT(cl_error);
 
     /* Create kernel */
-    kernel = create_kernel("zncc_opencl.cl", "zncc", context, device);
+    kernel = create_kernel("zncc_opencl.cl", "zncc", context, device, NULL);
 
     /* Left to right */
     /* zncc(il, ir, w, h, MIN_DISP, MAX_DISP, disparity_l2r); */
@@ -182,9 +184,6 @@ int main(int argc, char *argv[])
     execution_time_ms += end - start;
     printf("Total ZNCC kernel execution time is: %0.3f milliseconds \n", execution_time_ms / 1000000.0);
 
-    /* Cleanup */
-    cleanup(cmd_queue, kernel, context, input_buffer_left_cl, input_buffer_right_cl, output_buffer_l2r_cl, output_buffer_r2l_cl);
-
     lodepng_encode_file("l2r.png", disparity_l2r, w, h, LCT_GREY, 8);
     lodepng_encode_file("r2l.png", disparity_r2l, w, h, LCT_GREY, 8);
 
@@ -193,6 +192,57 @@ int main(int argc, char *argv[])
 
     /* Encode result */
     lodepng_encode_file(output_file, final_result, w, h, LCT_GREY, 8);
+
+    /*------------------------- LPF PART -------------------------*/
+    /* Create kernel */
+    sprintf(compile_args, "-DWIDTH=%d", w); //set WIDTH constant for kernel build
+    kernel_lpf = create_kernel("lpf.cl", "lpf", context, device, compile_args);
+
+    /* Allocate and initialize device memory for input and output */
+    input_buffer_lpf_cl  = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, image_buffer_size, final_result, &cl_error);
+    CHECK_OUTPUT(cl_error);
+    output_buffer_lpf_cl = clCreateBuffer(context, CL_MEM_WRITE_ONLY, image_buffer_size, NULL, &cl_error);
+    CHECK_OUTPUT(cl_error);
+
+    /* Set kernel arguments */
+    /* __kernel void lpf(__global unsigned char* image_in, unsigned int w, __global unsigned char* image_out) */
+    global_work_size_lpf = (size_t)h;
+    cl_error = clSetKernelArg(kernel_lpf, 0, sizeof(cl_mem), (void*)&input_buffer_lpf_cl);
+    CHECK_OUTPUT(cl_error);
+    cl_error = clSetKernelArg(kernel_lpf, 1, sizeof(unsigned int), (void*)&w);
+    CHECK_OUTPUT(cl_error);
+    cl_error = clSetKernelArg(kernel_lpf, 2, sizeof(cl_mem), (void*)&output_buffer_lpf_cl);
+    CHECK_OUTPUT(cl_error);
+    //cl_error = clSetKernelArg(kernel_lpf, 3, image_buffer_size, NULL);
+    //CHECK_OUTPUT(cl_error);
+
+    /* Launch kernel and link to event*/
+    cl_error = clEnqueueNDRangeKernel(cmd_queue, kernel_lpf, 1, NULL, &global_work_size_lpf, NULL, 0, NULL, &event_1);
+    CHECK_OUTPUT(cl_error);
+
+    /* Wait for kernel to finish */
+    clFinish(cmd_queue);
+
+    /* Copy the output from device memory back to host memory */
+    cl_error = clEnqueueReadBuffer(cmd_queue, output_buffer_lpf_cl, CL_TRUE, 0, image_buffer_size, final_result, 0, NULL, NULL);
+    CHECK_OUTPUT(cl_error);
+
+    /* Execution time measurement */
+    cl_error = clGetEventProfilingInfo(event_1, CL_PROFILING_COMMAND_START, sizeof(start), &start, NULL);
+    CHECK_OUTPUT(cl_error);
+    cl_error = clGetEventProfilingInfo(event_1, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
+    CHECK_OUTPUT(cl_error);
+    execution_time_ms = end - start;
+    printf("Total LPF kernel execution time is: %0.3f milliseconds \n", execution_time_ms / 1000000.0);
+
+    /* Encode result */
+    lodepng_encode_file("output_lpf.png", final_result, w, h, LCT_GREY, 8);
+
+    /*------------------------------------------------------------*/
+
+    /* Cleanup */
+    cleanup(cmd_queue, kernel, kernel_lpf, context, input_buffer_left_cl, input_buffer_right_cl, output_buffer_l2r_cl, output_buffer_r2l_cl, 
+            input_buffer_lpf_cl, output_buffer_lpf_cl);
     free(disparity_l2r);
     free(disparity_r2l);
     free(final_result);
@@ -311,7 +361,7 @@ void print_device_info(cl_device_id device_id)
 
 }
 
-cl_kernel create_kernel(char* filename, char* kernel_func_name, cl_context context, cl_device_id device)
+cl_kernel create_kernel(char* filename, char* kernel_func_name, cl_context context, cl_device_id device, char* compile_args)
 {
     FILE *fp;
     char *source_str;
@@ -337,8 +387,18 @@ cl_kernel create_kernel(char* filename, char* kernel_func_name, cl_context conte
     CHECK_OUTPUT(cl_error);
 
     /* Build kernel program */
-    cl_error = clBuildProgram(program, 1, &device, NULL, NULL, NULL);
+    cl_error = clBuildProgram(program, 1, &device, compile_args, NULL, NULL);
     CHECK_OUTPUT(cl_error);
+
+    /* Print log if kernel build fails */
+    if (cl_error == CL_BUILD_PROGRAM_FAILURE) 
+    {
+        size_t log_size;
+        clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+        char *log = (char *) malloc(log_size);
+        clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+        printf("%s\n", log);
+    }
 
     kernel = clCreateKernel(program, kernel_func_name, &cl_error);
     CHECK_OUTPUT(cl_error);
@@ -346,17 +406,20 @@ cl_kernel create_kernel(char* filename, char* kernel_func_name, cl_context conte
     return kernel;
 }
 
-void cleanup(cl_command_queue cmd_queue, cl_kernel kernel,
+void cleanup(cl_command_queue cmd_queue, cl_kernel kernel1, cl_kernel kernel2,
              cl_context context, cl_mem buf1, cl_mem buf2,
-             cl_mem buf3, cl_mem buf4)
+             cl_mem buf3, cl_mem buf4, cl_mem buf5, cl_mem buf6)
 {
     clFlush(cmd_queue);
     clFinish(cmd_queue);
-    clReleaseKernel(kernel);
+    clReleaseKernel(kernel1);
+    clReleaseKernel(kernel2);
     clReleaseCommandQueue(cmd_queue);
     clReleaseContext(context);
     clReleaseMemObject(buf1);
     clReleaseMemObject(buf2);
     clReleaseMemObject(buf3);
     clReleaseMemObject(buf4);
+    clReleaseMemObject(buf5);
+    clReleaseMemObject(buf6);
 }
